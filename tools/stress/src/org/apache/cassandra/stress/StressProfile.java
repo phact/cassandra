@@ -21,19 +21,10 @@
 package org.apache.cassandra.stress;
 
 
-import java.io.IOError;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.Serializable;
-import java.net.URI;
-import java.util.*;
-import java.util.concurrent.TimeUnit;
-
-import com.google.common.base.Function;
-import com.google.common.util.concurrent.Uninterruptibles;
-
 import com.datastax.driver.core.*;
 import com.datastax.driver.core.exceptions.AlreadyExistsException;
+import com.google.common.base.Function;
+import com.google.common.util.concurrent.Uninterruptibles;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.statements.CreateKeyspaceStatement;
@@ -56,6 +47,14 @@ import org.apache.thrift.TException;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;
 import org.yaml.snakeyaml.error.YAMLException;
+
+import java.io.IOError;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.Serializable;
+import java.net.URI;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class StressProfile implements Serializable
 {
@@ -481,8 +480,9 @@ public class StressProfile implements Serializable
                 case INET:
                     return new Inets(name, config);
                 case INT:
-                case VARINT:
                     return new Integers(name, config);
+                case VARINT:
+                    return new BigIntegers(name, config);
                 case TIMESTAMP:
                     return new Dates(name, config);
                 case UUID:
