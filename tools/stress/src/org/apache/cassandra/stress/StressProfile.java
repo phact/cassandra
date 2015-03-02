@@ -21,10 +21,19 @@
 package org.apache.cassandra.stress;
 
 
-import com.datastax.driver.core.*;
-import com.datastax.driver.core.exceptions.AlreadyExistsException;
+import java.io.IOError;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.Serializable;
+import java.net.URI;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.Uninterruptibles;
+
+import com.datastax.driver.core.*;
+import com.datastax.driver.core.exceptions.AlreadyExistsException;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.statements.CreateKeyspaceStatement;
@@ -47,14 +56,6 @@ import org.apache.thrift.TException;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;
 import org.yaml.snakeyaml.error.YAMLException;
-
-import java.io.IOError;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.Serializable;
-import java.net.URI;
-import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 public class StressProfile implements Serializable
 {
