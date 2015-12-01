@@ -17,18 +17,22 @@
  */
 package org.apache.cassandra.cql3.restrictions;
 
-import java.nio.ByteBuffer;
-import java.util.List;
+import java.util.Collection;
 
+import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.cql3.QueryOptions;
+import org.apache.cassandra.cql3.functions.Function;
 import org.apache.cassandra.cql3.statements.Bound;
-import org.apache.cassandra.db.IndexExpression;
-import org.apache.cassandra.db.index.SecondaryIndexManager;
+import org.apache.cassandra.db.MultiCBuilder;
+import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.exceptions.InvalidRequestException;
+import org.apache.cassandra.index.SecondaryIndexManager;
 
 /**
  * A restriction/clause on a column.
  * The goal of this class being to group all conditions for a column in a SELECT.
+ *
+ * <p>Implementation of this class must be immutable. See {@link #mergeWith(Restriction)} for more explanation.</p>
  */
 public interface Restriction
 {
@@ -37,18 +41,33 @@ public interface Restriction
     public boolean isEQ();
     public boolean isIN();
     public boolean isContains();
+    public boolean isNotNull();
     public boolean isMultiColumn();
 
-    public List<ByteBuffer> values(QueryOptions options) throws InvalidRequestException;
+    /**
+     * Returns the definition of the first column.
+     * @return the definition of the first column.
+     */
+    public ColumnDefinition getFirstColumn();
 
     /**
-     * Returns <code>true</code> if one of the restrictions use the specified function.
-     *
-     * @param ksName the keyspace name
-     * @param functionName the function name
-     * @return <code>true</code> if one of the restrictions use the specified function, <code>false</code> otherwise.
+     * Returns the definition of the last column.
+     * @return the definition of the last column.
      */
-    public boolean usesFunction(String ksName, String functionName);
+    public ColumnDefinition getLastColumn();
+
+    /**
+     * Returns the column definitions in position order.
+     * @return the column definitions in position order.
+     */
+    public Collection<ColumnDefinition> getColumnDefs();
+
+    /**
+     * Return an Iterable over all of the functions (both native and user-defined) used by any component
+     * of the restriction
+     * @return functions all functions found (may contain duplicates)
+     */
+    public Iterable<Function> getFunctions();
 
     /**
      * Checks if the specified bound is set or not.
@@ -56,8 +75,6 @@ public interface Restriction
      * @return <code>true</code> if the specified bound is set, <code>false</code> otherwise
      */
     public boolean hasBound(Bound b);
-
-    public List<ByteBuffer> bounds(Bound b, QueryOptions options) throws InvalidRequestException;
 
     /**
      * Checks if the specified bound is inclusive or not.
@@ -68,6 +85,10 @@ public interface Restriction
 
     /**
      * Merges this restriction with the specified one.
+     *
+     * <p>Restriction are immutable. Therefore merging two restrictions result in a new one.
+     * The reason behind this choice is that it allow a great flexibility in the way the merging can done while
+     * preventing any side effect.</p>
      *
      * @param otherRestriction the restriction to merge into this one
      * @return the restriction resulting of the merge
@@ -84,16 +105,34 @@ public interface Restriction
     public boolean hasSupportingIndex(SecondaryIndexManager indexManager);
 
     /**
-     * Adds to the specified list the <code>IndexExpression</code>s corresponding to this <code>Restriction</code>.
+     * Adds to the specified row filter the expressions corresponding to this <code>Restriction</code>.
      *
-     * @param expressions the list to add the <code>IndexExpression</code>s to
+     * @param filter the row filter to add expressions to
      * @param indexManager the secondary index manager
      * @param options the query options
-     * @throws InvalidRequestException if this <code>Restriction</code> cannot be converted into 
-     * <code>IndexExpression</code>s
+     * @throws InvalidRequestException if this <code>Restriction</code> cannot be converted into a row filter
      */
-    public void addIndexExpressionTo(List<IndexExpression> expressions,
-                                     SecondaryIndexManager indexManager,
-                                     QueryOptions options)
-                                     throws InvalidRequestException;
+    public void addRowFilterTo(RowFilter filter,
+                               SecondaryIndexManager indexManager,
+                               QueryOptions options)
+                               throws InvalidRequestException;
+
+    /**
+     * Appends the values of this <code>Restriction</code> to the specified builder.
+     *
+     * @param builder the <code>MultiCBuilder</code> to append to.
+     * @param options the query options
+     * @return the <code>MultiCBuilder</code>
+     */
+    public MultiCBuilder appendTo(MultiCBuilder builder, QueryOptions options);
+
+    /**
+     * Appends the values of the <code>Restriction</code> for the specified bound to the specified builder.
+     *
+     * @param builder the <code>MultiCBuilder</code> to append to.
+     * @param bound the bound
+     * @param options the query options
+     * @return the <code>MultiCBuilder</code>
+     */
+    public MultiCBuilder appendBoundTo(MultiCBuilder builder, Bound bound, QueryOptions options);
 }

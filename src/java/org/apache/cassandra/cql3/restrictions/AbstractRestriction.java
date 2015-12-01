@@ -17,17 +17,9 @@
  */
 package org.apache.cassandra.cql3.restrictions;
 
-import java.nio.ByteBuffer;
-import java.util.List;
-
-import org.apache.cassandra.cql3.ColumnSpecification;
 import org.apache.cassandra.cql3.QueryOptions;
-import org.apache.cassandra.cql3.Term;
 import org.apache.cassandra.cql3.statements.Bound;
-import org.apache.cassandra.exceptions.InvalidRequestException;
-
-import static org.apache.cassandra.cql3.statements.RequestValidations.checkFalse;
-import static org.apache.cassandra.cql3.statements.RequestValidations.checkNotNull;
+import org.apache.cassandra.db.MultiCBuilder;
 
 /**
  * Base class for <code>Restriction</code>s
@@ -71,59 +63,26 @@ abstract class AbstractRestriction  implements Restriction
     }
 
     @Override
+    public boolean isNotNull()
+    {
+        return false;
+    }
+
+    @Override
     public boolean hasBound(Bound b)
     {
         return true;
     }
 
     @Override
-    public List<ByteBuffer> bounds(Bound b, QueryOptions options) throws InvalidRequestException
+    public MultiCBuilder appendBoundTo(MultiCBuilder builder, Bound bound, QueryOptions options)
     {
-        return values(options);
+        return appendTo(builder, options);
     }
 
     @Override
     public boolean isInclusive(Bound b)
     {
         return true;
-    }
-
-    protected static ByteBuffer validateIndexedValue(ColumnSpecification columnSpec,
-                                                     ByteBuffer value)
-                                                     throws InvalidRequestException
-    {
-        checkNotNull(value, "Unsupported null value for indexed column %s", columnSpec.name);
-        checkFalse(value.remaining() > 0xFFFF, "Index expression values may not be larger than 64K");
-        return value;
-    }
-
-    /**
-     * Checks if the specified term is using the specified function.
-     *
-     * @param term the term to check
-     * @param ksName the function keyspace name
-     * @param functionName the function name
-     * @return <code>true</code> if the specified term is using the specified function, <code>false</code> otherwise.
-     */
-    protected static final boolean usesFunction(Term term, String ksName, String functionName)
-    {
-        return term != null && term.usesFunction(ksName, functionName);
-    }
-
-    /**
-     * Checks if one of the specified term is using the specified function.
-     *
-     * @param terms the terms to check
-     * @param ksName the function keyspace name
-     * @param functionName the function name
-     * @return <code>true</code> if onee of the specified term is using the specified function, <code>false</code> otherwise.
-     */
-    protected static final boolean usesFunction(List<Term> terms, String ksName, String functionName)
-    {
-        if (terms != null)
-            for (Term value : terms)
-                if (usesFunction(value, ksName, functionName))
-                    return true;
-        return false;
     }
 }

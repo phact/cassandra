@@ -20,7 +20,6 @@ package org.apache.cassandra.dht;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.cassandra.db.RowPosition;
 import org.apache.cassandra.utils.Pair;
 
 /**
@@ -32,7 +31,7 @@ public class ExcludingBounds<T extends RingPosition<T>> extends AbstractBounds<T
     {
         super(left, right);
         // unlike a Range, an ExcludingBounds may not wrap, nor be empty
-        assert left.compareTo(right) < 0 || right.isMinimum() : "(" + left + "," + right + ")";
+        assert !strictlyWrapsAround(left, right) && (right.isMinimum() || left.compareTo(right) != 0) : "(" + left + "," + right + ")";
     }
 
     public boolean contains(T position)
@@ -48,6 +47,16 @@ public class ExcludingBounds<T extends RingPosition<T>> extends AbstractBounds<T
         AbstractBounds<T> lb = new Range<T>(left, position);
         AbstractBounds<T> rb = new ExcludingBounds<T>(position, right);
         return Pair.create(lb, rb);
+    }
+
+    public boolean inclusiveLeft()
+    {
+        return false;
+    }
+
+    public boolean inclusiveRight()
+    {
+        return false;
     }
 
     public List<? extends AbstractBounds<T>> unwrap()
@@ -81,24 +90,14 @@ public class ExcludingBounds<T extends RingPosition<T>> extends AbstractBounds<T
         return ")";
     }
 
-    /**
-     * Compute a bounds of keys corresponding to a given bounds of token.
-     */
-    private static ExcludingBounds<RowPosition> makeRowBounds(Token left, Token right)
+    public boolean isStartInclusive()
     {
-        return new ExcludingBounds<RowPosition>(left.maxKeyBound(), right.minKeyBound());
+        return false;
     }
 
-    @SuppressWarnings("unchecked")
-    public AbstractBounds<RowPosition> toRowBounds()
+    public boolean isEndInclusive()
     {
-        return (left instanceof Token) ? makeRowBounds((Token)left, (Token)right) : (ExcludingBounds<RowPosition>)this;
-    }
-
-    @SuppressWarnings("unchecked")
-    public AbstractBounds<Token> toTokenBounds()
-    {
-        return (left instanceof RowPosition) ? new ExcludingBounds<Token>(((RowPosition)left).getToken(), ((RowPosition)right).getToken()) : (ExcludingBounds<Token>)this;
+        return false;
     }
 
     public AbstractBounds<T> withNewRight(T newRight)

@@ -17,6 +17,7 @@
  */
 package org.apache.cassandra.auth;
 
+import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
@@ -45,10 +46,10 @@ import static org.apache.cassandra.auth.CassandraRoleManager.consistencyForRole;
  * PasswordAuthenticator is an IAuthenticator implementation
  * that keeps credentials (rolenames and bcrypt-hashed passwords)
  * internally in C* - in system_auth.roles CQL3 table.
- * Since 3.0, the management of roles (creation, modification,
+ * Since 2.2, the management of roles (creation, modification,
  * querying etc is the responsibility of IRoleManager. Use of
  * PasswordAuthenticator requires the use of CassandraRoleManager
- * for storage & retrieval of encryted passwords.
+ * for storage and retrieval of encrypted passwords.
  */
 public class PasswordAuthenticator implements IAuthenticator
 {
@@ -86,7 +87,7 @@ public class PasswordAuthenticator implements IAuthenticator
         }
         catch (RequestExecutionException e)
         {
-            logger.debug("Error performing internal authentication", e);
+            logger.trace("Error performing internal authentication", e);
             throw new AuthenticationException(e.toString());
         }
     }
@@ -132,7 +133,7 @@ public class PasswordAuthenticator implements IAuthenticator
         return authenticate(username, password);
     }
 
-    public SaslNegotiator newSaslNegotiator()
+    public SaslNegotiator newSaslNegotiator(InetAddress clientAddress)
     {
         return new PlainTextSaslAuthenticator();
     }
@@ -196,7 +197,7 @@ public class PasswordAuthenticator implements IAuthenticator
          */
         private void decodeCredentials(byte[] bytes) throws AuthenticationException
         {
-            logger.debug("Decoding credentials from client token");
+            logger.trace("Decoding credentials from client token");
             byte[] user = null;
             byte[] pass = null;
             int end = bytes.length;

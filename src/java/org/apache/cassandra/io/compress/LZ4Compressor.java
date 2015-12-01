@@ -24,13 +24,17 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.common.annotations.VisibleForTesting;
 import net.jpountz.lz4.LZ4Exception;
 import net.jpountz.lz4.LZ4Factory;
+import org.apache.cassandra.schema.CompressionParams;
 
 public class LZ4Compressor implements ICompressor
 {
     private static final int INTEGER_BYTES = 4;
-    private static final LZ4Compressor instance = new LZ4Compressor();
+
+    @VisibleForTesting
+    public static final LZ4Compressor instance = new LZ4Compressor();
 
     public static LZ4Compressor create(Map<String, String> args)
     {
@@ -52,18 +56,17 @@ public class LZ4Compressor implements ICompressor
         return INTEGER_BYTES + compressor.maxCompressedLength(chunkLength);
     }
 
-    public int compress(byte[] input, int inputOffset, int inputLength, WrappedArray output, int outputOffset) throws IOException
+    public void compress(ByteBuffer input, ByteBuffer output) throws IOException
     {
-        final byte[] dest = output.buffer;
-        dest[outputOffset] = (byte) inputLength;
-        dest[outputOffset + 1] = (byte) (inputLength >>> 8);
-        dest[outputOffset + 2] = (byte) (inputLength >>> 16);
-        dest[outputOffset + 3] = (byte) (inputLength >>> 24);
-        final int maxCompressedLength = compressor.maxCompressedLength(inputLength);
+        int len = input.remaining();
+        output.put((byte) len);
+        output.put((byte) (len >>> 8));
+        output.put((byte) (len >>> 16));
+        output.put((byte) (len >>> 24));
+
         try
         {
-            return INTEGER_BYTES + compressor.compress(input, inputOffset, inputLength,
-                                                       dest, outputOffset + INTEGER_BYTES, maxCompressedLength);
+            compressor.compress(input, output);
         }
         catch (LZ4Exception e)
         {
@@ -78,6 +81,7 @@ public class LZ4Compressor implements ICompressor
                 | ((input[inputOffset + 1] & 0xFF) << 8)
                 | ((input[inputOffset + 2] & 0xFF) << 16)
                 | ((input[inputOffset + 3] & 0xFF) << 24);
+
         final int compressedLength;
         try
         {
@@ -97,42 +101,42 @@ public class LZ4Compressor implements ICompressor
         return decompressedLength;
     }
 
-    public int uncompress(ByteBuffer input, ByteBuffer output) throws IOException
+    public void uncompress(ByteBuffer input, ByteBuffer output) throws IOException
     {
-        int pos = input.position();
-        final int decompressedLength = (input.get(pos) & 0xFF)
-                | ((input.get(pos + 1) & 0xFF) << 8)
-                | ((input.get(pos + 2) & 0xFF) << 16)
-                | ((input.get(pos + 3) & 0xFF) << 24);
+        final int decompressedLength = (input.get() & 0xFF)
+                | ((input.get() & 0xFF) << 8)
+                | ((input.get() & 0xFF) << 16)
+                | ((input.get() & 0xFF) << 24);
 
-        int inputLength = input.remaining() - INTEGER_BYTES;
-
-        final int compressedLength;
         try
         {
-            compressedLength = decompressor.decompress(input, input.position() + INTEGER_BYTES, output, output.position(), decompressedLength);
+            int compressedLength = decompressor.decompress(input, input.position(), output, output.position(), decompressedLength);
+            input.position(input.position() + compressedLength);
+            output.position(output.position() + decompressedLength);
         }
         catch (LZ4Exception e)
         {
             throw new IOException(e);
         }
 
-        if (compressedLength != inputLength)
+        if (input.remaining() > 0)
         {
-            throw new IOException("Compressed lengths mismatch: "+compressedLength+" vs "+inputLength);
+            throw new IOException("Compressed lengths mismatch - "+input.remaining()+" bytes remain");
         }
-
-        return decompressedLength;
-    }
-
-    @Override
-    public boolean useDirectOutputByteBuffers()
-    {
-        return false;
     }
 
     public Set<String> supportedOptions()
     {
-        return new HashSet<>(Arrays.asList(CompressionParameters.CRC_CHECK_CHANCE));
+        return new HashSet<>();
+    }
+
+    public BufferType preferredBufferType()
+    {
+        return BufferType.OFF_HEAP;
+    }
+
+    public boolean supports(BufferType bufferType)
+    {
+        return true;
     }
 }

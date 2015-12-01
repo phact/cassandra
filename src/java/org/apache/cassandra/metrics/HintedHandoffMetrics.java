@@ -21,7 +21,6 @@ import java.net.InetAddress;
 import java.util.Map.Entry;
 
 import com.codahale.metrics.Counter;
-import org.apache.cassandra.db.HintedHandOffManager;
 import org.apache.cassandra.db.SystemKeyspace;
 import org.apache.cassandra.utils.UUIDGen;
 import org.slf4j.Logger;
@@ -34,7 +33,7 @@ import com.google.common.cache.LoadingCache;
 import static org.apache.cassandra.metrics.CassandraMetricsRegistry.Metrics;
 
 /**
- * Metrics for {@link HintedHandOffManager}.
+ * Metrics for {@link org.apache.cassandra.hints.HintsService}.
  */
 public class HintedHandoffMetrics
 {
@@ -56,7 +55,7 @@ public class HintedHandoffMetrics
     {
         public Counter load(InetAddress address)
         {
-            return Metrics.counter(factory.createMetricName("Hints_created-" + address.getHostAddress()));
+            return Metrics.counter(factory.createMetricName("Hints_created-" + address.getHostAddress().replace(':', '.')));
         }
     });
 
@@ -82,14 +81,14 @@ public class HintedHandoffMetrics
         }
     }
 
-    public class DifferencingCounter
+    public static class DifferencingCounter
     {
         private final Counter meter;
         private long reported = 0;
 
         public DifferencingCounter(InetAddress address)
         {
-            this.meter = Metrics.counter(factory.createMetricName("Hints_not_stored-" + address.getHostAddress()));
+            this.meter = Metrics.counter(factory.createMetricName("Hints_not_stored-" + address.getHostAddress().replace(':', '.')));
         }
 
         public long difference()

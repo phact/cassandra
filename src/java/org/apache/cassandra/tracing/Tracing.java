@@ -21,7 +21,6 @@ package org.apache.cassandra.tracing;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,15 +29,10 @@ import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.concurrent.Stage;
-import org.apache.cassandra.concurrent.StageManager;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.marshal.TimeUUIDType;
-import org.apache.cassandra.exceptions.OverloadedException;
 import org.apache.cassandra.net.MessageIn;
 import org.apache.cassandra.net.MessagingService;
-import org.apache.cassandra.service.StorageProxy;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.UUIDGen;
 
@@ -82,7 +76,7 @@ public class Tracing
         }
     }
 
-    private static final Logger logger = LoggerFactory.getLogger(Tracing.class);
+    static final Logger logger = LoggerFactory.getLogger(Tracing.class);
 
     private final InetAddress localAddress = FBUtilities.getLocalAddress();
 
@@ -133,7 +127,7 @@ public class Tracing
         return newSession(sessionId, TraceType.QUERY);
     }
 
-    public UUID newSession(UUID sessionId, TraceType traceType)
+    private UUID newSession(UUID sessionId, TraceType traceType)
     {
         assert state.get() == null;
 
@@ -158,7 +152,7 @@ public class Tracing
         TraceState state = this.state.get();
         if (state == null) // inline isTracing to avoid implicit two calls to state.get()
         {
-            logger.debug("request complete");
+            logger.trace("request complete");
         }
         else
         {
@@ -166,13 +160,7 @@ public class Tracing
             final ByteBuffer sessionId = state.sessionIdBytes;
             final int ttl = state.ttl;
 
-            StageManager.getStage(Stage.TRACING).execute(new Runnable()
-            {
-                public void run()
-                {
-                    mutateWithCatch(TraceKeyspace.makeStopSessionMutation(sessionId, elapsed, ttl));
-                }
-            });
+            TraceState.executeMutation(TraceKeyspace.makeStopSessionMutation(sessionId, elapsed, ttl));
 
             state.stop();
             sessions.remove(state.sessionId);
@@ -197,6 +185,11 @@ public class Tracing
 
     public TraceState begin(final String request, final Map<String, String> parameters)
     {
+        return begin(request, null, parameters);
+    }
+
+    public TraceState begin(final String request, final InetAddress client, final Map<String, String> parameters)
+    {
         assert isTracing();
 
         final TraceState state = this.state.get();
@@ -205,13 +198,7 @@ public class Tracing
         final String command = state.traceType.toString();
         final int ttl = state.ttl;
 
-        StageManager.getStage(Stage.TRACING).execute(new Runnable()
-        {
-            public void run()
-            {
-                mutateWithCatch(TraceKeyspace.makeStartSessionMutation(sessionId, parameters, request, startedAt, command, ttl));
-            }
-        });
+        TraceState.executeMutation(TraceKeyspace.makeStartSessionMutation(sessionId, client, parameters, request, startedAt, command, ttl));
 
         return state;
     }
@@ -291,24 +278,12 @@ public class Tracing
         state.trace(format, arg1, arg2);
     }
 
-    public static void trace(String format, Object[] args)
+    public static void trace(String format, Object... args)
     {
         final TraceState state = instance.get();
         if (state == null) // inline isTracing to avoid implicit two calls to state.get()
             return;
 
         state.trace(format, args);
-    }
-
-    static void mutateWithCatch(Mutation mutation)
-    {
-        try
-        {
-            StorageProxy.mutate(Arrays.asList(mutation), ConsistencyLevel.ANY);
-        }
-        catch (OverloadedException e)
-        {
-            logger.warn("Too many nodes are overloaded to save trace events");
-        }
     }
 }

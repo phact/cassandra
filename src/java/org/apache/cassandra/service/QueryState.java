@@ -17,6 +17,7 @@
  */
 package org.apache.cassandra.service;
 
+import java.net.InetAddress;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -75,15 +76,22 @@ public class QueryState
 
     public void createTracingSession()
     {
-        if (this.preparedTracingSession == null)
+        UUID session = this.preparedTracingSession;
+        if (session == null)
         {
             Tracing.instance.newSession();
         }
         else
         {
-            UUID session = this.preparedTracingSession;
-            this.preparedTracingSession = null;
             Tracing.instance.newSession(session);
+            this.preparedTracingSession = null;
         }
+    }
+
+    public InetAddress getClientAddress()
+    {
+        return clientState.isInternal
+             ? null
+             : clientState.getRemoteAddress().getAddress();
     }
 }

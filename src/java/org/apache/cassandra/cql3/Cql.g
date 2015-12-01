@@ -39,6 +39,7 @@ options {
 
     import org.apache.cassandra.auth.*;
     import org.apache.cassandra.cql3.*;
+    import org.apache.cassandra.cql3.restrictions.CustomIndexExpression;
     import org.apache.cassandra.cql3.statements.*;
     import org.apache.cassandra.cql3.selection.*;
     import org.apache.cassandra.cql3.functions.*;
@@ -56,7 +57,6 @@ options {
     public static final Set<String> reservedTypeNames = new HashSet<String>()
     {{
         add("byte");
-        add("smallint");
         add("complex");
         add("enum");
         add("date");
@@ -89,6 +89,13 @@ options {
     public Tuples.INRaw newTupleINBindVariables(ColumnIdentifier name)
     {
         Tuples.INRaw marker = new Tuples.INRaw(bindVariables.size());
+        bindVariables.add(name);
+        return marker;
+    }
+
+    public Json.Marker newJsonBindVariables(ColumnIdentifier name)
+    {
+        Json.Marker marker = new Json.Marker(bindVariables.size());
         bindVariables.add(name);
         return marker;
     }
@@ -165,6 +172,8 @@ options {
 
     public Set<Permission> filterPermissions(Set<Permission> permissions, IResource resource)
     {
+        if (resource == null)
+            return Collections.emptySet();
         Set<Permission> filtered = new HashSet<>(permissions);
         filtered.retainAll(resource.applicablePermissions());
         if (filtered.isEmpty())
@@ -225,43 +234,46 @@ query returns [ParsedStatement stmnt]
 
 cqlStatement returns [ParsedStatement stmt]
     @after{ if (stmt != null) stmt.setBoundVariables(bindVariables); }
-    : st1= selectStatement             { $stmt = st1; }
-    | st2= insertStatement             { $stmt = st2; }
-    | st3= updateStatement             { $stmt = st3; }
-    | st4= batchStatement              { $stmt = st4; }
-    | st5= deleteStatement             { $stmt = st5; }
-    | st6= useStatement                { $stmt = st6; }
-    | st7= truncateStatement           { $stmt = st7; }
-    | st8= createKeyspaceStatement     { $stmt = st8; }
-    | st9= createTableStatement        { $stmt = st9; }
-    | st10=createIndexStatement        { $stmt = st10; }
-    | st11=dropKeyspaceStatement       { $stmt = st11; }
-    | st12=dropTableStatement          { $stmt = st12; }
-    | st13=dropIndexStatement          { $stmt = st13; }
-    | st14=alterTableStatement         { $stmt = st14; }
-    | st15=alterKeyspaceStatement      { $stmt = st15; }
-    | st16=grantPermissionsStatement   { $stmt = st16; }
-    | st17=revokePermissionsStatement  { $stmt = st17; }
-    | st18=listPermissionsStatement    { $stmt = st18; }
-    | st19=createUserStatement         { $stmt = st19; }
-    | st20=alterUserStatement          { $stmt = st20; }
-    | st21=dropUserStatement           { $stmt = st21; }
-    | st22=listUsersStatement          { $stmt = st22; }
-    | st23=createTriggerStatement      { $stmt = st23; }
-    | st24=dropTriggerStatement        { $stmt = st24; }
-    | st25=createTypeStatement         { $stmt = st25; }
-    | st26=alterTypeStatement          { $stmt = st26; }
-    | st27=dropTypeStatement           { $stmt = st27; }
-    | st28=createFunctionStatement     { $stmt = st28; }
-    | st29=dropFunctionStatement       { $stmt = st29; }
-    | st30=createAggregateStatement    { $stmt = st30; }
-    | st31=dropAggregateStatement      { $stmt = st31; }
-    | st32=createRoleStatement         { $stmt = st32; }
-    | st33=alterRoleStatement          { $stmt = st33; }
-    | st34=dropRoleStatement           { $stmt = st34; }
-    | st35=listRolesStatement          { $stmt = st35; }
-    | st36=grantRoleStatement          { $stmt = st36; }
-    | st37=revokeRoleStatement         { $stmt = st37; }
+    : st1= selectStatement                 { $stmt = st1; }
+    | st2= insertStatement                 { $stmt = st2; }
+    | st3= updateStatement                 { $stmt = st3; }
+    | st4= batchStatement                  { $stmt = st4; }
+    | st5= deleteStatement                 { $stmt = st5; }
+    | st6= useStatement                    { $stmt = st6; }
+    | st7= truncateStatement               { $stmt = st7; }
+    | st8= createKeyspaceStatement         { $stmt = st8; }
+    | st9= createTableStatement            { $stmt = st9; }
+    | st10=createIndexStatement            { $stmt = st10; }
+    | st11=dropKeyspaceStatement           { $stmt = st11; }
+    | st12=dropTableStatement              { $stmt = st12; }
+    | st13=dropIndexStatement              { $stmt = st13; }
+    | st14=alterTableStatement             { $stmt = st14; }
+    | st15=alterKeyspaceStatement          { $stmt = st15; }
+    | st16=grantPermissionsStatement       { $stmt = st16; }
+    | st17=revokePermissionsStatement      { $stmt = st17; }
+    | st18=listPermissionsStatement        { $stmt = st18; }
+    | st19=createUserStatement             { $stmt = st19; }
+    | st20=alterUserStatement              { $stmt = st20; }
+    | st21=dropUserStatement               { $stmt = st21; }
+    | st22=listUsersStatement              { $stmt = st22; }
+    | st23=createTriggerStatement          { $stmt = st23; }
+    | st24=dropTriggerStatement            { $stmt = st24; }
+    | st25=createTypeStatement             { $stmt = st25; }
+    | st26=alterTypeStatement              { $stmt = st26; }
+    | st27=dropTypeStatement               { $stmt = st27; }
+    | st28=createFunctionStatement         { $stmt = st28; }
+    | st29=dropFunctionStatement           { $stmt = st29; }
+    | st30=createAggregateStatement        { $stmt = st30; }
+    | st31=dropAggregateStatement          { $stmt = st31; }
+    | st32=createRoleStatement             { $stmt = st32; }
+    | st33=alterRoleStatement              { $stmt = st33; }
+    | st34=dropRoleStatement               { $stmt = st34; }
+    | st35=listRolesStatement              { $stmt = st35; }
+    | st36=grantRoleStatement              { $stmt = st36; }
+    | st37=revokeRoleStatement             { $stmt = st37; }
+    | st38=createMaterializedViewStatement { $stmt = st38; }
+    | st39=dropMaterializedViewStatement   { $stmt = st39; }
+    | st40=alterMaterializedViewStatement  { $stmt = st40; }
     ;
 
 /*
@@ -283,9 +295,11 @@ selectStatement returns [SelectStatement.RawStatement expr]
         Term.Raw limit = null;
         Map<ColumnIdentifier.Raw, Boolean> orderings = new LinkedHashMap<ColumnIdentifier.Raw, Boolean>();
         boolean allowFiltering = false;
+        boolean isJson = false;
     }
-    : K_SELECT ( ( K_DISTINCT { isDistinct = true; } )? sclause=selectClause
-               | sclause=selectCountClause )
+    : K_SELECT 
+      ( K_JSON { isJson = true; } )?
+      ( ( K_DISTINCT { isDistinct = true; } )? sclause=selectClause )
       K_FROM cf=columnFamilyName
       ( K_WHERE wclause=whereClause )?
       ( K_ORDER K_BY orderByClause[orderings] ( ',' orderByClause[orderings] )* )?
@@ -294,8 +308,10 @@ selectStatement returns [SelectStatement.RawStatement expr]
       {
           SelectStatement.Parameters params = new SelectStatement.Parameters(orderings,
                                                                              isDistinct,
-                                                                             allowFiltering);
-          $expr = new SelectStatement.RawStatement(cf, params, sclause, wclause, limit);
+                                                                             allowFiltering,
+                                                                             isJson);
+          WhereClause where = wclause == null ? WhereClause.empty() : wclause.build();
+          $expr = new SelectStatement.RawStatement(cf, params, sclause, where, limit);
       }
     ;
 
@@ -306,14 +322,16 @@ selectClause returns [List<RawSelector> expr]
 
 selector returns [RawSelector s]
     @init{ ColumnIdentifier alias = null; }
-    : us=unaliasedSelector (K_AS c=ident { alias = c; })? { $s = new RawSelector(us, alias); }
+    : us=unaliasedSelector (K_AS c=noncol_ident { alias = c; })? { $s = new RawSelector(us, alias); }
     ;
 
 unaliasedSelector returns [Selectable.Raw s]
     @init { Selectable.Raw tmp = null; }
     :  ( c=cident                                  { tmp = c; }
+       | K_COUNT '(' countArgument ')'             { tmp = Selectable.WithFunction.Raw.newCountRowsFunction();}
        | K_WRITETIME '(' c=cident ')'              { tmp = new Selectable.WritetimeOrTTL.Raw(c, true); }
        | K_TTL       '(' c=cident ')'              { tmp = new Selectable.WritetimeOrTTL.Raw(c, false); }
+       | K_CAST      '(' sn=unaliasedSelector K_AS t=native_type ')' {tmp = new Selectable.WithCast.Raw(sn, t);}
        | f=functionName args=selectionFunctionArgs { tmp = new Selectable.WithFunction.Raw(f, args); }
        ) ( '.' fi=cident { tmp = new Selectable.WithFieldSelection.Raw(tmp, fi); } )* { $s = tmp; }
     ;
@@ -325,19 +343,24 @@ selectionFunctionArgs returns [List<Selectable.Raw> a]
       ')' { $a = args; }
     ;
 
-selectCountClause returns [List<RawSelector> expr]
-    @init{ ColumnIdentifier alias = new ColumnIdentifier("count", false); }
-    : K_COUNT '(' countArgument ')' (K_AS c=ident { alias = c; })? { $expr = new ArrayList<RawSelector>(); $expr.add( new RawSelector(new Selectable.WithFunction.Raw(FunctionName.nativeFunction("countRows"), Collections.<Selectable.Raw>emptyList()), alias));}
-    ;
-
 countArgument
     : '\*'
     | i=INTEGER { if (!i.getText().equals("1")) addRecognitionError("Only COUNT(1) is supported, got COUNT(" + i.getText() + ")");}
     ;
 
-whereClause returns [List<Relation> clause]
-    @init{ $clause = new ArrayList<Relation>(); }
-    : relation[$clause] (K_AND relation[$clause])*
+whereClause returns [WhereClause.Builder clause]
+    @init{ $clause = new WhereClause.Builder(); }
+    : relationOrExpression[$clause] (K_AND relationOrExpression[$clause])*
+    ;
+
+relationOrExpression [WhereClause.Builder clause]
+    : relation[$clause]
+    | customIndexExpression[$clause]
+    ;
+
+customIndexExpression [WhereClause.Builder clause]
+    @init{IndexName name = new IndexName();}
+    : 'expr(' idxName[name] ',' t=term ')' { clause.add(new CustomIndexExpression(name, t));}
     ;
 
 orderByClause[Map<ColumnIdentifier.Raw, Boolean> orderings]
@@ -353,27 +376,47 @@ orderByClause[Map<ColumnIdentifier.Raw, Boolean> orderings]
  * USING TIMESTAMP <long>;
  *
  */
-insertStatement returns [UpdateStatement.ParsedInsert expr]
+insertStatement returns [ModificationStatement.Parsed expr]
+    : K_INSERT K_INTO cf=columnFamilyName
+        ( st1=normalInsertStatement[cf] { $expr = st1; }
+        | K_JSON st2=jsonInsertStatement[cf] { $expr = st2; })
+    ;
+
+normalInsertStatement [CFName cf] returns [UpdateStatement.ParsedInsert expr]
     @init {
         Attributes.Raw attrs = new Attributes.Raw();
         List<ColumnIdentifier.Raw> columnNames  = new ArrayList<ColumnIdentifier.Raw>();
         List<Term.Raw> values = new ArrayList<Term.Raw>();
         boolean ifNotExists = false;
     }
-    : K_INSERT K_INTO cf=columnFamilyName
-          '(' c1=cident { columnNames.add(c1); }  ( ',' cn=cident { columnNames.add(cn); } )* ')'
-        K_VALUES
-          '(' v1=term { values.add(v1); } ( ',' vn=term { values.add(vn); } )* ')'
-
-        ( K_IF K_NOT K_EXISTS { ifNotExists = true; } )?
-        ( usingClause[attrs] )?
+    : '(' c1=cident { columnNames.add(c1); }  ( ',' cn=cident { columnNames.add(cn); } )* ')'
+      K_VALUES
+      '(' v1=term { values.add(v1); } ( ',' vn=term { values.add(vn); } )* ')'
+      ( K_IF K_NOT K_EXISTS { ifNotExists = true; } )?
+      ( usingClause[attrs] )?
       {
-          $expr = new UpdateStatement.ParsedInsert(cf,
-                                                   attrs,
-                                                   columnNames,
-                                                   values,
-                                                   ifNotExists);
+          $expr = new UpdateStatement.ParsedInsert(cf, attrs, columnNames, values, ifNotExists);
       }
+    ;
+
+jsonInsertStatement [CFName cf] returns [UpdateStatement.ParsedInsertJson expr]
+    @init {
+        Attributes.Raw attrs = new Attributes.Raw();
+        boolean ifNotExists = false;
+    }
+    : val=jsonValue
+      ( K_IF K_NOT K_EXISTS { ifNotExists = true; } )?
+      ( usingClause[attrs] )?
+      {
+          $expr = new UpdateStatement.ParsedInsertJson(cf, attrs, val, ifNotExists);
+      }
+    ;
+
+jsonValue returns [Json.Raw value]
+    :
+    | s=STRING_LITERAL { $value = new Json.Literal($s.text); }
+    | ':' id=noncol_ident     { $value = newJsonBindVariables(id); }
+    | QMARK            { $value = newJsonBindVariables(null); }
     ;
 
 usingClause[Attributes.Raw attrs]
@@ -390,6 +433,7 @@ usingClauseObjective[Attributes.Raw attrs]
  * USING TIMESTAMP <long>
  * SET name1 = value1, name2 = value2
  * WHERE key = value;
+ * [IF (EXISTS | name = value, ...)];
  */
 updateStatement returns [UpdateStatement.ParsedUpdate expr]
     @init {
@@ -406,7 +450,7 @@ updateStatement returns [UpdateStatement.ParsedUpdate expr]
           return new UpdateStatement.ParsedUpdate(cf,
                                                   attrs,
                                                   operations,
-                                                  wclause,
+                                                  wclause.build(),
                                                   conditions == null ? Collections.<Pair<ColumnIdentifier.Raw, ColumnCondition.Raw>>emptyList() : conditions,
                                                   ifExists);
      }
@@ -440,7 +484,7 @@ deleteStatement returns [DeleteStatement.Parsed expr]
           return new DeleteStatement.Parsed(cf,
                                             attrs,
                                             columnDeletions,
-                                            wclause,
+                                            wclause.build(),
                                             conditions == null ? Collections.<Pair<ColumnIdentifier.Raw, ColumnCondition.Raw>>emptyList() : conditions,
                                             ifExists);
       }
@@ -561,25 +605,26 @@ createFunctionStatement returns [CreateFunctionStatement expr]
         boolean orReplace = false;
         boolean ifNotExists = false;
 
-        boolean deterministic = true;
         List<ColumnIdentifier> argsNames = new ArrayList<>();
         List<CQL3Type.Raw> argsTypes = new ArrayList<>();
+        boolean calledOnNullInput = false;
     }
     : K_CREATE (K_OR K_REPLACE { orReplace = true; })?
-      ((K_NON { deterministic = false; })? K_DETERMINISTIC)?
       K_FUNCTION
       (K_IF K_NOT K_EXISTS { ifNotExists = true; })?
       fn=functionName
       '('
         (
-          k=ident v=comparatorType { argsNames.add(k); argsTypes.add(v); }
-          ( ',' k=ident v=comparatorType { argsNames.add(k); argsTypes.add(v); } )*
+          k=noncol_ident v=comparatorType { argsNames.add(k); argsTypes.add(v); }
+          ( ',' k=noncol_ident v=comparatorType { argsNames.add(k); argsTypes.add(v); } )*
         )?
       ')'
+      ( (K_RETURNS K_NULL) | (K_CALLED { calledOnNullInput=true; })) K_ON K_NULL K_INPUT
       K_RETURNS rt = comparatorType
       K_LANGUAGE language = IDENT
       K_AS body = STRING_LITERAL
-      { $expr = new CreateFunctionStatement(fn, $language.text.toLowerCase(), $body.text, deterministic, argsNames, argsTypes, rt, orReplace, ifNotExists); }
+      { $expr = new CreateFunctionStatement(fn, $language.text.toLowerCase(), $body.text,
+                                            argsNames, argsTypes, rt, calledOnNullInput, orReplace, ifNotExists); }
     ;
 
 dropFunctionStatement returns [DropFunctionStatement expr]
@@ -608,7 +653,7 @@ dropFunctionStatement returns [DropFunctionStatement expr]
  */
 createKeyspaceStatement returns [CreateKeyspaceStatement expr]
     @init {
-        KSPropDefs attrs = new KSPropDefs();
+        KeyspaceAttributes attrs = new KeyspaceAttributes();
         boolean ifNotExists = false;
     }
     : K_CREATE K_KEYSPACE (K_IF K_NOT K_EXISTS { ifNotExists = true; } )? ks=keyspaceName
@@ -631,7 +676,7 @@ createTableStatement returns [CreateTableStatement.RawStatement expr]
 
 cfamDefinition[CreateTableStatement.RawStatement expr]
     : '(' cfamColumns[expr] ( ',' cfamColumns[expr]? )* ')'
-      ( K_WITH cfamProperty[expr] ( K_AND cfamProperty[expr] )*)?
+      ( K_WITH cfamProperty[expr.properties] ( K_AND cfamProperty[expr.properties] )*)?
     ;
 
 cfamColumns[CreateTableStatement.RawStatement expr]
@@ -645,15 +690,15 @@ pkDef[CreateTableStatement.RawStatement expr]
     | '(' { List<ColumnIdentifier> l = new ArrayList<ColumnIdentifier>(); } k1=ident { l.add(k1); } ( ',' kn=ident { l.add(kn); } )* ')' { $expr.addKeyAliases(l); }
     ;
 
-cfamProperty[CreateTableStatement.RawStatement expr]
-    : property[expr.properties]
-    | K_COMPACT K_STORAGE { $expr.setCompactStorage(); }
-    | K_CLUSTERING K_ORDER K_BY '(' cfamOrdering[expr] (',' cfamOrdering[expr])* ')'
+cfamProperty[CFProperties props]
+    : property[props.properties]
+    | K_COMPACT K_STORAGE { $props.setCompactStorage(); }
+    | K_CLUSTERING K_ORDER K_BY '(' cfamOrdering[props] (',' cfamOrdering[props])* ')'
     ;
 
-cfamOrdering[CreateTableStatement.RawStatement expr]
+cfamOrdering[CFProperties props]
     @init{ boolean reversed=false; }
-    : k=ident (K_ASC | K_DESC { reversed=true;} ) { $expr.setOrdering(k, reversed); }
+    : k=ident (K_ASC | K_DESC { reversed=true;} ) { $props.setOrdering(k, reversed); }
     ;
 
 
@@ -672,7 +717,7 @@ createTypeStatement returns [CreateTypeStatement expr]
     ;
 
 typeColumns[CreateTypeStatement expr]
-    : k=ident v=comparatorType { $expr.addDefinition(k, v); }
+    : k=noncol_ident v=comparatorType { $expr.addDefinition(k, v); }
     ;
 
 
@@ -685,21 +730,50 @@ createIndexStatement returns [CreateIndexStatement expr]
         IndexPropDefs props = new IndexPropDefs();
         boolean ifNotExists = false;
         IndexName name = new IndexName();
+        List<IndexTarget.Raw> targets = new ArrayList<>();
     }
     : K_CREATE (K_CUSTOM { props.isCustom = true; })? K_INDEX (K_IF K_NOT K_EXISTS { ifNotExists = true; } )?
-        (idxName[name])? K_ON cf=columnFamilyName '(' id=indexIdent ')'
+        (idxName[name])? K_ON cf=columnFamilyName '(' (indexIdent[targets] (',' indexIdent[targets])*)? ')'
         (K_USING cls=STRING_LITERAL { props.customClass = $cls.text; })?
         (K_WITH properties[props])?
-      { $expr = new CreateIndexStatement(cf, name, id, props, ifNotExists); }
+      { $expr = new CreateIndexStatement(cf, name, targets, props, ifNotExists); }
     ;
 
-indexIdent returns [IndexTarget.Raw id]
-    : c=cident                   { $id = IndexTarget.Raw.valuesOf(c); }
-    | K_KEYS '(' c=cident ')'    { $id = IndexTarget.Raw.keysOf(c); }
-    | K_ENTRIES '(' c=cident ')' { $id = IndexTarget.Raw.keysAndValuesOf(c); }
-    | K_FULL '(' c=cident ')'    { $id = IndexTarget.Raw.fullCollection(c); }
+indexIdent [List<IndexTarget.Raw> targets]
+    : c=cident                   { $targets.add(IndexTarget.Raw.simpleIndexOn(c)); }
+    | K_VALUES '(' c=cident ')'  { $targets.add(IndexTarget.Raw.valuesOf(c)); }
+    | K_KEYS '(' c=cident ')'    { $targets.add(IndexTarget.Raw.keysOf(c)); }
+    | K_ENTRIES '(' c=cident ')' { $targets.add(IndexTarget.Raw.keysAndValuesOf(c)); }
+    | K_FULL '(' c=cident ')'    { $targets.add(IndexTarget.Raw.fullCollection(c)); }
     ;
 
+/**
+ * CREATE MATERIALIZED VIEW <viewName> AS
+ *  SELECT <columns>
+ *  FROM <CF>
+ *  WHERE <pkColumns> IS NOT NULL
+ *  PRIMARY KEY (<pkColumns>)
+ *  WITH <property> = <value> AND ...;
+ */
+createMaterializedViewStatement returns [CreateViewStatement expr]
+    @init {
+        boolean ifNotExists = false;
+        List<ColumnIdentifier.Raw> partitionKeys = new ArrayList<>();
+        List<ColumnIdentifier.Raw> compositeKeys = new ArrayList<>();
+    }
+    : K_CREATE K_MATERIALIZED K_VIEW (K_IF K_NOT K_EXISTS { ifNotExists = true; })? cf=columnFamilyName K_AS
+        K_SELECT sclause=selectClause K_FROM basecf=columnFamilyName
+        (K_WHERE wclause=whereClause)?
+        K_PRIMARY K_KEY (
+        '(' '(' k1=cident { partitionKeys.add(k1); } ( ',' kn=cident { partitionKeys.add(kn); } )* ')' ( ',' c1=cident { compositeKeys.add(c1); } )* ')'
+    |   '(' k1=cident { partitionKeys.add(k1); } ( ',' cn=cident { compositeKeys.add(cn); } )* ')'
+        )
+        {
+             WhereClause where = wclause == null ? WhereClause.empty() : wclause.build();
+             $expr = new CreateViewStatement(cf, basecf, sclause, where, partitionKeys, compositeKeys, ifNotExists);
+        }
+        ( K_WITH cfamProperty[expr.properties] ( K_AND cfamProperty[expr.properties] )*)?
+    ;
 
 /**
  * CREATE TRIGGER triggerName ON columnFamily USING 'triggerClass';
@@ -726,7 +800,7 @@ dropTriggerStatement returns [DropTriggerStatement expr]
  * ALTER KEYSPACE <KS> WITH <property> = <value>;
  */
 alterKeyspaceStatement returns [AlterKeyspaceStatement expr]
-    @init { KSPropDefs attrs = new KSPropDefs(); }
+    @init { KeyspaceAttributes attrs = new KeyspaceAttributes(); }
     : K_ALTER K_KEYSPACE ks=keyspaceName
         K_WITH properties[attrs] { $expr = new AlterKeyspaceStatement(ks, attrs); }
     ;
@@ -742,7 +816,7 @@ alterKeyspaceStatement returns [AlterKeyspaceStatement expr]
 alterTableStatement returns [AlterTableStatement expr]
     @init {
         AlterTableStatement.Type type = null;
-        CFPropDefs props = new CFPropDefs();
+        TableAttributes attrs = new TableAttributes();
         Map<ColumnIdentifier.Raw, ColumnIdentifier.Raw> renames = new HashMap<ColumnIdentifier.Raw, ColumnIdentifier.Raw>();
         boolean isStatic = false;
     }
@@ -750,15 +824,27 @@ alterTableStatement returns [AlterTableStatement expr]
           ( K_ALTER id=cident K_TYPE v=comparatorType { type = AlterTableStatement.Type.ALTER; }
           | K_ADD   id=cident v=comparatorType ({ isStatic=true; } K_STATIC)? { type = AlterTableStatement.Type.ADD; }
           | K_DROP  id=cident                         { type = AlterTableStatement.Type.DROP; }
-          | K_WITH  properties[props]                 { type = AlterTableStatement.Type.OPTS; }
+          | K_WITH  properties[attrs]                 { type = AlterTableStatement.Type.OPTS; }
           | K_RENAME                                  { type = AlterTableStatement.Type.RENAME; }
                id1=cident K_TO toId1=cident { renames.put(id1, toId1); }
                ( K_AND idn=cident K_TO toIdn=cident { renames.put(idn, toIdn); } )*
           )
     {
-        $expr = new AlterTableStatement(cf, type, id, v, props, renames, isStatic);
+        $expr = new AlterTableStatement(cf, type, id, v, attrs, renames, isStatic);
     }
     ;
+
+alterMaterializedViewStatement returns [AlterViewStatement expr]
+    @init {
+        TableAttributes attrs = new TableAttributes();
+    }
+    : K_ALTER K_MATERIALIZED K_VIEW name=columnFamilyName
+          K_WITH properties[attrs]
+    {
+        $expr = new AlterViewStatement(name, attrs);
+    }
+    ;
+    
 
 /**
  * ALTER TYPE <name> ALTER <field> TYPE <newtype>;
@@ -767,12 +853,12 @@ alterTableStatement returns [AlterTableStatement expr]
  */
 alterTypeStatement returns [AlterTypeStatement expr]
     : K_ALTER K_TYPE name=userTypeName
-          ( K_ALTER f=ident K_TYPE v=comparatorType { $expr = AlterTypeStatement.alter(name, f, v); }
-          | K_ADD   f=ident v=comparatorType        { $expr = AlterTypeStatement.addition(name, f, v); }
+          ( K_ALTER f=noncol_ident K_TYPE v=comparatorType { $expr = AlterTypeStatement.alter(name, f, v); }
+          | K_ADD   f=noncol_ident v=comparatorType        { $expr = AlterTypeStatement.addition(name, f, v); }
           | K_RENAME
                { Map<ColumnIdentifier, ColumnIdentifier> renames = new HashMap<ColumnIdentifier, ColumnIdentifier>(); }
-                 id1=ident K_TO toId1=ident { renames.put(id1, toId1); }
-                 ( K_AND idn=ident K_TO toIdn=ident { renames.put(idn, toIdn); } )*
+                 id1=noncol_ident K_TO toId1=noncol_ident { renames.put(id1, toId1); }
+                 ( K_AND idn=noncol_ident K_TO toIdn=noncol_ident { renames.put(idn, toIdn); } )*
                { $expr = AlterTypeStatement.renames(name, renames); }
           )
     ;
@@ -812,10 +898,19 @@ dropIndexStatement returns [DropIndexStatement expr]
     ;
 
 /**
+ * DROP MATERIALIZED VIEW [IF EXISTS] <view_name>
+ */
+dropMaterializedViewStatement returns [DropViewStatement expr]
+    @init { boolean ifExists = false; }
+    : K_DROP K_MATERIALIZED K_VIEW (K_IF K_EXISTS { ifExists = true; } )? cf=columnFamilyName
+      { $expr = new DropViewStatement(cf, ifExists); }
+    ;
+
+/**
   * TRUNCATE <CF>;
   */
 truncateStatement returns [TruncateStatement stmt]
-    : K_TRUNCATE cf=columnFamilyName { $stmt = new TruncateStatement(cf); }
+    : K_TRUNCATE (K_COLUMNFAMILY)? cf=columnFamilyName { $stmt = new TruncateStatement(cf); }
     ;
 
 /**
@@ -881,7 +976,7 @@ listPermissionsStatement returns [ListPermissionsStatement stmt]
     ;
 
 permission returns [Permission perm]
-    : p=(K_CREATE | K_ALTER | K_DROP | K_SELECT | K_MODIFY | K_AUTHORIZE | K_DESCRIBE)
+    : p=(K_CREATE | K_ALTER | K_DROP | K_SELECT | K_MODIFY | K_AUTHORIZE | K_DESCRIBE | K_EXECUTE)
     { $perm = Permission.valueOf($p.text.toUpperCase()); }
     ;
 
@@ -893,6 +988,7 @@ permissionOrAll returns [Set<Permission> perms]
 resource returns [IResource res]
     : d=dataResource { $res = $d.res; }
     | r=roleResource { $res = $r.res; }
+    | f=functionResource { $res = $f.res; }
     ;
 
 dataResource returns [DataResource res]
@@ -902,9 +998,28 @@ dataResource returns [DataResource res]
       { $res = DataResource.table($cf.name.getKeyspace(), $cf.name.getColumnFamily()); }
     ;
 
-roleResource  returns [RoleResource res]
+roleResource returns [RoleResource res]
     : K_ALL K_ROLES { $res = RoleResource.root(); }
     | K_ROLE role = userOrRoleName { $res = RoleResource.role($role.name.getName()); }
+    ;
+
+functionResource returns [FunctionResource res]
+    @init {
+        List<CQL3Type.Raw> argsTypes = new ArrayList<>();
+    }
+    : K_ALL K_FUNCTIONS { $res = FunctionResource.root(); }
+    | K_ALL K_FUNCTIONS K_IN K_KEYSPACE ks = keyspaceName { $res = FunctionResource.keyspace($ks.id); }
+    // Arg types are mandatory for DCL statements on Functions
+    | K_FUNCTION fn=functionName
+      (
+        '('
+          (
+            v=comparatorType { argsTypes.add(v); }
+            ( ',' v=comparatorType { argsTypes.add(v); } )*
+          )?
+        ')'
+      )
+      { $res = FunctionResource.functionFromCql($fn.s.keyspace, $fn.s.name, argsTypes); }
     ;
 
 /**
@@ -913,15 +1028,15 @@ roleResource  returns [RoleResource res]
 createUserStatement returns [CreateRoleStatement stmt]
     @init {
         RoleOptions opts = new RoleOptions();
-        opts.put(IRoleManager.Option.LOGIN.name(), true);
+        opts.setOption(IRoleManager.Option.LOGIN, true);
         boolean superuser = false;
         boolean ifNotExists = false;
         RoleName name = new RoleName();
     }
-    : K_CREATE K_USER (K_IF K_NOT K_EXISTS { ifNotExists = true; })? u=username { name.setName($u.text, false); }
-      ( K_WITH roleOptions[opts] )?
+    : K_CREATE K_USER (K_IF K_NOT K_EXISTS { ifNotExists = true; })? u=username { name.setName($u.text, true); }
+      ( K_WITH userPassword[opts] )?
       ( K_SUPERUSER { superuser = true; } | K_NOSUPERUSER { superuser = false; } )?
-      { opts.put(IRoleManager.Option.SUPERUSER.name(), superuser);
+      { opts.setOption(IRoleManager.Option.SUPERUSER, superuser);
         $stmt = new CreateRoleStatement(name, opts, ifNotExists); }
     ;
 
@@ -934,9 +1049,9 @@ alterUserStatement returns [AlterRoleStatement stmt]
         RoleName name = new RoleName();
     }
     : K_ALTER K_USER u=username { name.setName($u.text, false); }
-      ( K_WITH roleOptions[opts] )?
-      ( K_SUPERUSER { opts.put(IRoleManager.Option.SUPERUSER.name(), true); }
-        | K_NOSUPERUSER { opts.put(IRoleManager.Option.SUPERUSER.name(), false); } ) ?
+      ( K_WITH userPassword[opts] )?
+      ( K_SUPERUSER { opts.setOption(IRoleManager.Option.SUPERUSER, true); }
+        | K_NOSUPERUSER { opts.setOption(IRoleManager.Option.SUPERUSER, false); } ) ?
       {  $stmt = new AlterRoleStatement(name, opts); }
     ;
 
@@ -959,26 +1074,43 @@ listUsersStatement returns [ListRolesStatement stmt]
     ;
 
 /**
- * CREATE ROLE [IF NOT EXISTS] <rolename> [WITH PASSWORD <password>] [SUPERUSER|NOSUPERUSER] [LOGIN|NOLOGIN]
+ * CREATE ROLE [IF NOT EXISTS] <rolename> [ [WITH] option [ [AND] option ]* ]
+ *
+ * where option can be:
+ *  PASSWORD = '<password>'
+ *  SUPERUSER = (true|false)
+ *  LOGIN = (true|false)
+ *  OPTIONS = { 'k1':'v1', 'k2':'v2'}
  */
 createRoleStatement returns [CreateRoleStatement stmt]
     @init {
         RoleOptions opts = new RoleOptions();
-        boolean superuser = false;
-        boolean login = false;
         boolean ifNotExists = false;
     }
     : K_CREATE K_ROLE (K_IF K_NOT K_EXISTS { ifNotExists = true; })? name=userOrRoleName
       ( K_WITH roleOptions[opts] )?
-      ( K_SUPERUSER { superuser = true; } | K_NOSUPERUSER { superuser = false; } )?
-      ( K_LOGIN { login = true; } | K_NOLOGIN { login = false; } )?
-      { opts.put(IRoleManager.Option.SUPERUSER.name(), superuser);
-        opts.put(IRoleManager.Option.LOGIN.name(), login);
-        $stmt = new CreateRoleStatement(name, opts, ifNotExists); }
+      {
+        // set defaults if they weren't explictly supplied
+        if (!opts.getLogin().isPresent())
+        {
+            opts.setOption(IRoleManager.Option.LOGIN, false);
+        }
+        if (!opts.getSuperuser().isPresent())
+        {
+            opts.setOption(IRoleManager.Option.SUPERUSER, false);
+        }
+        $stmt = new CreateRoleStatement(name, opts, ifNotExists);
+      }
     ;
 
 /**
- * ALTER ROLE <rolename> [WITH PASSWORD <password>] [SUPERUSER|NOSUPERUSER]
+ * ALTER ROLE <rolename> [ [WITH] option [ [AND] option ]* ]
+ *
+ * where option can be:
+ *  PASSWORD = '<password>'
+ *  SUPERUSER = (true|false)
+ *  LOGIN = (true|false)
+ *  OPTIONS = { 'k1':'v1', 'k2':'v2'}
  */
 alterRoleStatement returns [AlterRoleStatement stmt]
     @init {
@@ -986,10 +1118,6 @@ alterRoleStatement returns [AlterRoleStatement stmt]
     }
     : K_ALTER K_ROLE name=userOrRoleName
       ( K_WITH roleOptions[opts] )?
-      ( K_SUPERUSER { opts.put(IRoleManager.Option.SUPERUSER.name(), true); }
-        | K_NOSUPERUSER { opts.put(IRoleManager.Option.SUPERUSER.name(), false); } ) ?
-      ( K_LOGIN { opts.put(IRoleManager.Option.LOGIN.name(), true); }
-        | K_NOLOGIN { opts.put(IRoleManager.Option.LOGIN.name(), false); } )?
       {  $stmt = new AlterRoleStatement(name, opts); }
     ;
 
@@ -1023,8 +1151,15 @@ roleOptions[RoleOptions opts]
     ;
 
 roleOption[RoleOptions opts]
-    :  k=K_PASSWORD '='? v=STRING_LITERAL { opts.put($k.text, $v.text); }
-    |  k=K_OPTIONS '='? m=mapLiteral { opts.put(IRoleManager.Option.OPTIONS.name(), convertPropertyMap(m)); }
+    :  K_PASSWORD '=' v=STRING_LITERAL { opts.setOption(IRoleManager.Option.PASSWORD, $v.text); }
+    |  K_OPTIONS '=' m=mapLiteral { opts.setOption(IRoleManager.Option.OPTIONS, convertPropertyMap(m)); }
+    |  K_SUPERUSER '=' b=BOOLEAN { opts.setOption(IRoleManager.Option.SUPERUSER, Boolean.valueOf($b.text)); }
+    |  K_LOGIN '=' b=BOOLEAN { opts.setOption(IRoleManager.Option.LOGIN, Boolean.valueOf($b.text)); }
+    ;
+
+// for backwards compatibility in CREATE/ALTER USER, this has no '='
+userPassword[RoleOptions opts]
+    :  K_PASSWORD v=STRING_LITERAL { opts.setOption(IRoleManager.Option.PASSWORD, $v.text); }
     ;
 
 /** DEFINITIONS **/
@@ -1033,13 +1168,20 @@ roleOption[RoleOptions opts]
 // identifiers because the underlying comparator is not necessarily text. See
 // CASSANDRA-8178 for details.
 cident returns [ColumnIdentifier.Raw id]
-    : t=IDENT              { $id = new ColumnIdentifier.Raw($t.text, false); }
-    | t=QUOTED_NAME        { $id = new ColumnIdentifier.Raw($t.text, true); }
-    | k=unreserved_keyword { $id = new ColumnIdentifier.Raw(k, false); }
+    : t=IDENT              { $id = new ColumnIdentifier.Literal($t.text, false); }
+    | t=QUOTED_NAME        { $id = new ColumnIdentifier.Literal($t.text, true); }
+    | k=unreserved_keyword { $id = new ColumnIdentifier.Literal(k, false); }
     ;
 
-// Identifiers that do not refer to columns or where the comparator is known to be text
+// Column identifiers where the comparator is known to be text
 ident returns [ColumnIdentifier id]
+    : t=IDENT              { $id = ColumnIdentifier.getInterned($t.text, false); }
+    | t=QUOTED_NAME        { $id = ColumnIdentifier.getInterned($t.text, true); }
+    | k=unreserved_keyword { $id = ColumnIdentifier.getInterned(k, false); }
+    ;
+
+// Identifiers that do not refer to columns
+noncol_ident returns [ColumnIdentifier id]
     : t=IDENT              { $id = new ColumnIdentifier($t.text, false); }
     | t=QUOTED_NAME        { $id = new ColumnIdentifier($t.text, true); }
     | k=unreserved_keyword { $id = new ColumnIdentifier(k, false); }
@@ -1062,7 +1204,7 @@ columnFamilyName returns [CFName name]
     ;
 
 userTypeName returns [UTName name]
-    : (ks=ident '.')? ut=non_type_ident { return new UTName(ks, ut); }
+    : (ks=noncol_ident '.')? ut=non_type_ident { return new UTName(ks, ut); }
     ;
 
 userOrRoleName returns [RoleName name]
@@ -1093,6 +1235,7 @@ idxName[IndexName name]
 
 roleName[RoleName name]
     : t=IDENT              { $name.setName($t.text, false); }
+    | s=STRING_LITERAL     { $name.setName($s.text, true); }
     | t=QUOTED_NAME        { $name.setName($t.text, true); }
     | k=unreserved_keyword { $name.setName(k, false); }
     | QMARK {addRecognitionError("Bind variables cannot be used for role names");}
@@ -1137,7 +1280,7 @@ usertypeLiteral returns [UserTypes.Literal ut]
     @init{ Map<ColumnIdentifier, Term.Raw> m = new HashMap<ColumnIdentifier, Term.Raw>(); }
     @after{ $ut = new UserTypes.Literal(m); }
     // We don't allow empty literals because that conflicts with sets/maps and is currently useless since we don't allow empty user types
-    : '{' k1=ident ':' v1=term { m.put(k1, v1); } ( ',' kn=ident ':' vn=term { m.put(kn, vn); } )* '}'
+    : '{' k1=noncol_ident ':' v1=term { m.put(k1, v1); } ( ',' kn=noncol_ident ':' vn=term { m.put(kn, vn); } )* '}'
     ;
 
 tupleLiteral returns [Tuples.Literal tt]
@@ -1152,14 +1295,14 @@ value returns [Term.Raw value]
     | u=usertypeLiteral    { $value = u; }
     | t=tupleLiteral       { $value = t; }
     | K_NULL               { $value = Constants.NULL_LITERAL; }
-    | ':' id=ident         { $value = newBindVariables(id); }
+    | ':' id=noncol_ident  { $value = newBindVariables(id); }
     | QMARK                { $value = newBindVariables(null); }
     ;
 
 intValue returns [Term.Raw value]
     :
     | t=INTEGER     { $value = Constants.Literal.integer($t.text); }
-    | ':' id=ident  { $value = newBindVariables(id); }
+    | ':' id=noncol_ident  { $value = newBindVariables(id); }
     | QMARK         { $value = newBindVariables(null); }
     ;
 
@@ -1260,8 +1403,8 @@ properties[PropertyDefinitions props]
     ;
 
 property[PropertyDefinitions props]
-    : k=ident '=' (simple=propertyValue { try { $props.addProperty(k.toString(), simple); } catch (SyntaxException e) { addRecognitionError(e.getMessage()); } }
-                  |   map=mapLiteral    { try { $props.addProperty(k.toString(), convertPropertyMap(map)); } catch (SyntaxException e) { addRecognitionError(e.getMessage()); } })
+    : k=noncol_ident '=' simple=propertyValue { try { $props.addProperty(k.toString(), simple); } catch (SyntaxException e) { addRecognitionError(e.getMessage()); } }
+    | k=noncol_ident '=' map=mapLiteral { try { $props.addProperty(k.toString(), convertPropertyMap(map)); } catch (SyntaxException e) { addRecognitionError(e.getMessage()); } }
     ;
 
 propertyValue returns [String str]
@@ -1278,8 +1421,9 @@ relationType returns [Operator op]
     | '!=' { $op = Operator.NEQ; }
     ;
 
-relation[List<Relation> clauses]
+relation[WhereClause.Builder clauses]
     : name=cident type=relationType t=term { $clauses.add(new SingleColumnRelation(name, type, t)); }
+    | name=cident K_IS K_NOT K_NULL { $clauses.add(new SingleColumnRelation(name, Operator.IS_NOT, Constants.NULL_LITERAL)); }
     | K_TOKEN l=tupleOfIdentifiers type=relationType t=term
         { $clauses.add(new TokenRelation(l, type, t)); }
     | name=cident K_IN marker=inMarker
@@ -1314,7 +1458,7 @@ relation[List<Relation> clauses]
 
 inMarker returns [AbstractMarker.INRaw marker]
     : QMARK { $marker = newINBindVariables(null); }
-    | ':' name=ident { $marker = newINBindVariables(name); }
+    | ':' name=noncol_ident { $marker = newINBindVariables(name); }
     ;
 
 tupleOfIdentifiers returns [List<ColumnIdentifier.Raw> ids]
@@ -1334,7 +1478,7 @@ tupleOfTupleLiterals returns [List<Tuples.Literal> literals]
 
 markerForTuple returns [Tuples.Raw marker]
     : QMARK { $marker = newTupleBindVariables(null); }
-    | ':' name=ident { $marker = newTupleBindVariables(name); }
+    | ':' name=noncol_ident { $marker = newTupleBindVariables(name); }
     ;
 
 tupleOfMarkersForTuples returns [List<Tuples.Raw> markers]
@@ -1344,7 +1488,7 @@ tupleOfMarkersForTuples returns [List<Tuples.Raw> markers]
 
 inMarkerForTuple returns [Tuples.INRaw marker]
     : QMARK { $marker = newTupleINBindVariables(null); }
-    | ':' name=ident { $marker = newTupleINBindVariables(name); }
+    | ':' name=noncol_ident { $marker = newTupleINBindVariables(name); }
     ;
 
 comparatorType returns [CQL3Type.Raw t]
@@ -1383,12 +1527,16 @@ native_type returns [CQL3Type t]
     | K_FLOAT     { $t = CQL3Type.Native.FLOAT; }
     | K_INET      { $t = CQL3Type.Native.INET;}
     | K_INT       { $t = CQL3Type.Native.INT; }
+    | K_SMALLINT  { $t = CQL3Type.Native.SMALLINT; }
     | K_TEXT      { $t = CQL3Type.Native.TEXT; }
     | K_TIMESTAMP { $t = CQL3Type.Native.TIMESTAMP; }
+    | K_TINYINT   { $t = CQL3Type.Native.TINYINT; }
     | K_UUID      { $t = CQL3Type.Native.UUID; }
     | K_VARCHAR   { $t = CQL3Type.Native.VARCHAR; }
     | K_VARINT    { $t = CQL3Type.Native.VARINT; }
     | K_TIMEUUID  { $t = CQL3Type.Native.TIMEUUID; }
+    | K_DATE      { $t = CQL3Type.Native.DATE; }
+    | K_TIME      { $t = CQL3Type.Native.TIME; }
     ;
 
 collection_type returns [CQL3Type.Raw pt]
@@ -1413,6 +1561,7 @@ tuple_type returns [CQL3Type.Raw t]
 username
     : IDENT
     | STRING_LITERAL
+    | QUOTED_NAME { addRecognitionError("Quoted strings are are not supported for user names and USER is deprecated, please use ROLE");}
     ;
 
 // Basically the same as cident, but we need to exlude existing CQL3 types
@@ -1426,7 +1575,7 @@ non_type_ident returns [ColumnIdentifier id]
 
 unreserved_keyword returns [String str]
     : u=unreserved_function_keyword     { $str = u; }
-    | k=(K_TTL | K_COUNT | K_WRITETIME | K_KEY) { $str = $k.text; }
+    | k=(K_TTL | K_COUNT | K_WRITETIME | K_KEY | K_CAST) { $str = $k.text; }
     ;
 
 unreserved_function_keyword returns [String str]
@@ -1465,7 +1614,10 @@ basic_unreserved_keyword returns [String str]
         | K_DISTINCT
         | K_CONTAINS
         | K_STATIC
+        | K_FROZEN
+        | K_TUPLE
         | K_FUNCTION
+        | K_FUNCTIONS
         | K_AGGREGATE
         | K_SFUNC
         | K_STYPE
@@ -1473,8 +1625,9 @@ basic_unreserved_keyword returns [String str]
         | K_INITCOND
         | K_RETURNS
         | K_LANGUAGE
-        | K_NON
-        | K_DETERMINISTIC
+        | K_JSON
+        | K_CALLED
+        | K_INPUT
         ) { $str = $k.text; }
     ;
 
@@ -1510,6 +1663,8 @@ K_KEYSPACE:    ( K E Y S P A C E
 K_KEYSPACES:   K E Y S P A C E S;
 K_COLUMNFAMILY:( C O L U M N F A M I L Y
                  | T A B L E );
+K_MATERIALIZED:M A T E R I A L I Z E D;
+K_VIEW:        V I E W;
 K_INDEX:       I N D E X;
 K_CUSTOM:      C U S T O M;
 K_ON:          O N;
@@ -1520,6 +1675,7 @@ K_INTO:        I N T O;
 K_VALUES:      V A L U E S;
 K_TIMESTAMP:   T I M E S T A M P;
 K_TTL:         T T L;
+K_CAST:        C A S T;
 K_ALTER:       A L T E R;
 K_RENAME:      R E N A M E;
 K_ADD:         A D D;
@@ -1533,6 +1689,7 @@ K_DESC:        D E S C;
 K_ALLOW:       A L L O W;
 K_FILTERING:   F I L T E R I N G;
 K_IF:          I F;
+K_IS:          I S;
 K_CONTAINS:    C O N T A I N S;
 
 K_GRANT:       G R A N T;
@@ -1544,6 +1701,7 @@ K_REVOKE:      R E V O K E;
 K_MODIFY:      M O D I F Y;
 K_AUTHORIZE:   A U T H O R I Z E;
 K_DESCRIBE:    D E S C R I B E;
+K_EXECUTE:     E X E C U T E;
 K_NORECURSIVE: N O R E C U R S I V E;
 
 K_USER:        U S E R;
@@ -1568,6 +1726,8 @@ K_DOUBLE:      D O U B L E;
 K_FLOAT:       F L O A T;
 K_INET:        I N E T;
 K_INT:         I N T;
+K_SMALLINT:    S M A L L I N T;
+K_TINYINT:     T I N Y I N T;
 K_TEXT:        T E X T;
 K_UUID:        U U I D;
 K_VARCHAR:     V A R C H A R;
@@ -1575,6 +1735,8 @@ K_VARINT:      V A R I N T;
 K_TIMEUUID:    T I M E U U I D;
 K_TOKEN:       T O K E N;
 K_WRITETIME:   W R I T E T I M E;
+K_DATE:        D A T E;
+K_TIME:        T I M E;
 
 K_NULL:        N U L L;
 K_NOT:         N O T;
@@ -1591,17 +1753,20 @@ K_STATIC:      S T A T I C;
 K_FROZEN:      F R O Z E N;
 
 K_FUNCTION:    F U N C T I O N;
+K_FUNCTIONS:   F U N C T I O N S;
 K_AGGREGATE:   A G G R E G A T E;
 K_SFUNC:       S F U N C;
 K_STYPE:       S T Y P E;
 K_FINALFUNC:   F I N A L F U N C;
 K_INITCOND:    I N I T C O N D;
 K_RETURNS:     R E T U R N S;
+K_CALLED:      C A L L E D;
+K_INPUT:       I N P U T;
 K_LANGUAGE:    L A N G U A G E;
-K_NON:         N O N;
 K_OR:          O R;
 K_REPLACE:     R E P L A C E;
-K_DETERMINISTIC: D E T E R M I N I S T I C;
+
+K_JSON:        J S O N;
 
 // Case-insensitive alpha characters
 fragment A: ('a'|'A');

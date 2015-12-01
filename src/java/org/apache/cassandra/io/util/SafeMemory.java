@@ -22,6 +22,7 @@ import net.nicoulaj.compilecommand.annotations.Inline;
 import org.apache.cassandra.utils.concurrent.Ref;
 import org.apache.cassandra.utils.concurrent.RefCounted;
 import org.apache.cassandra.utils.concurrent.SharedCloseable;
+import org.apache.cassandra.utils.memory.MemoryUtil;
 
 public class SafeMemory extends Memory implements SharedCloseable
 {
@@ -52,11 +53,18 @@ public class SafeMemory extends Memory implements SharedCloseable
     public void free()
     {
         ref.release();
+        peer = 0;
     }
 
     public void close()
     {
         ref.ensureReleased();
+        peer = 0;
+    }
+
+    public Throwable close(Throwable accumulate)
+    {
+        return ref.ensureReleased(accumulate);
     }
 
     public SafeMemory copy(long newSize)
@@ -80,7 +88,7 @@ public class SafeMemory extends Memory implements SharedCloseable
         {
             /** see {@link Memory#Memory(long)} re: null pointers*/
             if (peer != 0)
-                Memory.allocator.free(peer);
+                MemoryUtil.free(peer);
         }
 
         public String name()
@@ -94,5 +102,10 @@ public class SafeMemory extends Memory implements SharedCloseable
     {
         assert peer != 0 || size == 0 : ref.printDebugInfo();
         super.checkBounds(start, end);
+    }
+
+    public void addTo(Ref.IdentityCollection identities)
+    {
+        identities.add(ref);
     }
 }

@@ -43,10 +43,8 @@ import org.apache.cassandra.stress.generate.*;
 import org.apache.cassandra.stress.generate.values.*;
 import org.apache.cassandra.stress.operations.userdefined.SchemaInsert;
 import org.apache.cassandra.stress.operations.userdefined.SchemaQuery;
-import org.apache.cassandra.stress.settings.OptionDistribution;
-import org.apache.cassandra.stress.settings.OptionRatioDistribution;
-import org.apache.cassandra.stress.settings.StressSettings;
-import org.apache.cassandra.stress.settings.ValidationType;
+import org.apache.cassandra.stress.operations.userdefined.ValidatingSchemaQuery;
+import org.apache.cassandra.stress.settings.*;
 import org.apache.cassandra.stress.util.JavaDriverClient;
 import org.apache.cassandra.stress.util.ThriftClient;
 import org.apache.cassandra.stress.util.Timer;
@@ -61,6 +59,7 @@ public class StressProfile implements Serializable
 {
     private String keyspaceCql;
     private String tableCql;
+    private List<String> extraSchemaDefinitions;
     private String seedStr;
 
     public String keyspaceName;
@@ -76,8 +75,10 @@ public class StressProfile implements Serializable
     transient volatile BatchStatement.Type batchType;
     transient volatile DistributionFactory partitions;
     transient volatile RatioDistributionFactory selectchance;
+    transient volatile RatioDistributionFactory rowPopulation;
     transient volatile PreparedStatement insertStatement;
     transient volatile Integer thriftInsertId;
+    transient volatile List<ValidatingSchemaQuery.Factory> validationFactories;
 
     transient volatile Map<String, SchemaQuery.ArgSelect> argSelects;
     transient volatile Map<String, PreparedStatement> queryStatements;
@@ -92,6 +93,8 @@ public class StressProfile implements Serializable
         seedStr = "seed for stress";
         queries = yaml.queries;
         insert = yaml.insert;
+
+        extraSchemaDefinitions = yaml.extra_definitions;
 
         assert keyspaceName != null : "keyspace name is required in yaml file";
         assert tableName != null : "table name is required in yaml file";
@@ -123,7 +126,7 @@ public class StressProfile implements Serializable
             }
             catch (RuntimeException e)
             {
-                throw new IllegalArgumentException("There was a problem parsing the table cql: " + e.getCause().getMessage());
+                throw new IllegalArgumentException("There was a problem parsing the table cql: " + e.getMessage());
             }
         }
         else
@@ -169,7 +172,7 @@ public class StressProfile implements Serializable
             }
         }
 
-        client.execute("use "+keyspaceName, org.apache.cassandra.db.ConsistencyLevel.ONE);
+        client.execute("use " + keyspaceName, org.apache.cassandra.db.ConsistencyLevel.ONE);
 
         if (tableCql != null)
         {
@@ -185,9 +188,37 @@ public class StressProfile implements Serializable
             Uninterruptibles.sleepUninterruptibly(settings.node.nodes.size(), TimeUnit.SECONDS);
         }
 
+        if (extraSchemaDefinitions != null)
+        {
+            for (String extraCql : extraSchemaDefinitions)
+            {
+
+                try
+                {
+                    client.execute(extraCql, org.apache.cassandra.db.ConsistencyLevel.ONE);
+                }
+                catch (AlreadyExistsException e)
+                {
+                }
+            }
+
+            System.out.println(String.format("Created extra schema. Sleeping %ss for propagation.", settings.node.nodes.size()));
+            Uninterruptibles.sleepUninterruptibly(settings.node.nodes.size(), TimeUnit.SECONDS);
+        }
+
         maybeLoadSchemaInfo(settings);
     }
 
+    public void truncateTable(StressSettings settings)
+    {
+        JavaDriverClient client = settings.getJavaDriverClient(false);
+        assert settings.command.truncate != SettingsCommand.TruncateWhen.NEVER;
+        String cql = String.format("TRUNCATE %s.%s", keyspaceName, tableName);
+        client.execute(cql, org.apache.cassandra.db.ConsistencyLevel.ONE);
+        System.out.println(String.format("Truncated %s.%s. Sleeping %ss for propagation.",
+                                         keyspaceName, tableName, settings.node.nodes.size()));
+        Uninterruptibles.sleepUninterruptibly(settings.node.nodes.size(), TimeUnit.SECONDS);
+    }
 
     private void maybeLoadSchemaInfo(StressSettings settings)
     {
@@ -234,14 +265,21 @@ public class StressProfile implements Serializable
                     try
                     {
                         JavaDriverClient jclient = settings.getJavaDriverClient();
-                        ThriftClient tclient = settings.getThriftClient();
+                        ThriftClient tclient = null;
+
+                        if (settings.mode.api != ConnectionAPI.JAVA_DRIVER_NATIVE)
+                            tclient = settings.getThriftClient();
+
                         Map<String, PreparedStatement> stmts = new HashMap<>();
                         Map<String, Integer> tids = new HashMap<>();
                         Map<String, SchemaQuery.ArgSelect> args = new HashMap<>();
                         for (Map.Entry<String, StressYaml.QueryDef> e : queries.entrySet())
                         {
                             stmts.put(e.getKey().toLowerCase(), jclient.prepare(e.getValue().cql));
-                            tids.put(e.getKey().toLowerCase(), tclient.prepare_cql3_query(e.getValue().cql, Compression.NONE));
+
+                            if (tclient != null)
+                                tids.put(e.getKey().toLowerCase(), tclient.prepare_cql3_query(e.getValue().cql, Compression.NONE));
+
                             args.put(e.getKey().toLowerCase(), e.getValue().fields == null
                                                                      ? SchemaQuery.ArgSelect.MULTIROW
                                                                      : SchemaQuery.ArgSelect.valueOf(e.getValue().fields.toUpperCase()));
@@ -258,12 +296,11 @@ public class StressProfile implements Serializable
             }
         }
 
-        // TODO validation
         name = name.toLowerCase();
         if (!queryStatements.containsKey(name))
             throw new IllegalArgumentException("No query defined with name " + name);
         return new SchemaQuery(timer, settings, generator, seeds, thriftQueryIds.get(name), queryStatements.get(name),
-                               ThriftConversion.fromThrift(settings.command.consistencyLevel), ValidationType.NOT_FAIL, argSelects.get(name));
+                               ThriftConversion.fromThrift(settings.command.consistencyLevel), argSelects.get(name));
     }
 
     public SchemaInsert getInsert(Timer timer, PartitionGenerator generator, SeedManager seedManager, StressSettings settings)
@@ -333,6 +370,7 @@ public class StressProfile implements Serializable
 
                     partitions = select(settings.insert.batchsize, "partitions", "fixed(1)", insert, OptionDistribution.BUILDER);
                     selectchance = select(settings.insert.selectRatio, "select", "fixed(1)/1", insert, OptionRatioDistribution.BUILDER);
+                    rowPopulation = select(settings.insert.rowPopulationRatio, "row-population", "fixed(1)/1", insert, OptionRatioDistribution.BUILDER);
                     batchType = settings.insert.batchType != null
                                 ? settings.insert.batchType
                                 : !insert.containsKey("batchtype")
@@ -365,20 +403,45 @@ public class StressProfile implements Serializable
 
                     JavaDriverClient client = settings.getJavaDriverClient();
                     String query = sb.toString();
-                    try
+
+                    if (settings.mode.api != ConnectionAPI.JAVA_DRIVER_NATIVE)
                     {
-                        thriftInsertId = settings.getThriftClient().prepare_cql3_query(query, Compression.NONE);
+                        try
+                        {
+                            thriftInsertId = settings.getThriftClient().prepare_cql3_query(query, Compression.NONE);
+                        }
+                        catch (TException e)
+                        {
+                            throw new RuntimeException(e);
+                        }
                     }
-                    catch (TException e)
-                    {
-                        throw new RuntimeException(e);
-                    }
+
                     insertStatement = client.prepare(query);
                 }
             }
         }
 
-        return new SchemaInsert(timer, settings, generator, seedManager, partitions.get(), selectchance.get(), thriftInsertId, insertStatement, ThriftConversion.fromThrift(settings.command.consistencyLevel), batchType);
+        return new SchemaInsert(timer, settings, generator, seedManager, partitions.get(), selectchance.get(), rowPopulation.get(), thriftInsertId, insertStatement, ThriftConversion.fromThrift(settings.command.consistencyLevel), batchType);
+    }
+
+    public List<ValidatingSchemaQuery> getValidate(Timer timer, PartitionGenerator generator, SeedManager seedManager, StressSettings settings)
+    {
+        if (validationFactories == null)
+        {
+            synchronized (this)
+            {
+                if (validationFactories == null)
+                {
+                    maybeLoadSchemaInfo(settings);
+                    validationFactories = ValidatingSchemaQuery.create(tableMetaData, settings);
+                }
+            }
+        }
+
+        List<ValidatingSchemaQuery> queries = new ArrayList<>();
+        for (ValidatingSchemaQuery.Factory factory : validationFactories)
+            queries.add(factory.create(timer, settings, generator, seedManager, ThriftConversion.fromThrift(settings.command.consistencyLevel)));
+        return queries;
     }
 
     private static <E> E select(E first, String key, String defValue, Map<String, String> map, Function<String, E> builder)
@@ -389,6 +452,7 @@ public class StressProfile implements Serializable
             return first;
         if (val != null && val.trim().length() > 0)
             return builder.apply(val);
+        
         return builder.apply(defValue);
     }
 
@@ -482,8 +546,9 @@ public class StressProfile implements Serializable
                 case INET:
                     return new Inets(name, config);
                 case INT:
-                case VARINT:
                     return new Integers(name, config);
+                case VARINT:
+                    return new BigIntegers(name, config);
                 case TIMESTAMP:
                     return new Dates(name, config);
                 case UUID:

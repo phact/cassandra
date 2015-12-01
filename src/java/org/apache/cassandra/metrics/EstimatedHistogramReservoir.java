@@ -33,9 +33,10 @@ public class EstimatedHistogramReservoir implements Reservoir
 {
     EstimatedHistogram histogram;
 
+    // Default to >4 hours of in nanoseconds of buckets
     public EstimatedHistogramReservoir()
     {
-        this(128);
+        this(164);
     }
 
     public EstimatedHistogramReservoir(int numBuckets)
@@ -67,7 +68,7 @@ public class EstimatedHistogramReservoir implements Reservoir
         histogram.getBuckets(true);
     }
 
-    class HistogramSnapshot extends UniformSnapshot
+    static class HistogramSnapshot extends UniformSnapshot
     {
         EstimatedHistogram histogram;
 

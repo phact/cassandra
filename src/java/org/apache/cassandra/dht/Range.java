@@ -21,7 +21,8 @@ import java.io.Serializable;
 import java.util.*;
 
 import org.apache.commons.lang3.ObjectUtils;
-import org.apache.cassandra.db.RowPosition;
+
+import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.utils.Pair;
 
 /**
@@ -223,6 +224,16 @@ public class Range<T extends RingPosition<T>> extends AbstractBounds<T> implemen
         return Pair.create(lb, rb);
     }
 
+    public boolean inclusiveLeft()
+    {
+        return false;
+    }
+
+    public boolean inclusiveRight()
+    {
+        return true;
+    }
+
     public List<Range<T>> unwrap()
     {
         T minValue = right.minValue();
@@ -301,7 +312,7 @@ public class Range<T extends RingPosition<T>> extends AbstractBounds<T> implemen
         else
         {
             @SuppressWarnings("unchecked")
-            Range<T>[] intersections = (Range<T>[]) new Range[intersectionSet.size()];
+            Range<T>[] intersections = new Range[intersectionSet.size()];
             intersectionSet.toArray(intersections);
             if (intersections.length == 1)
             {
@@ -362,6 +373,16 @@ public class Range<T extends RingPosition<T>> extends AbstractBounds<T> implemen
         return "]";
     }
 
+    public boolean isStartInclusive()
+    {
+        return false;
+    }
+
+    public boolean isEndInclusive()
+    {
+        return true;
+    }
+
     public List<String> asList()
     {
         ArrayList<String> ret = new ArrayList<String>(2);
@@ -412,7 +433,7 @@ public class Range<T extends RingPosition<T>> extends AbstractBounds<T> implemen
         Iterator<Range<T>> iter = ranges.iterator();
         Range<T> current = iter.next();
 
-        T min = (T) current.left.minValue();
+        T min = current.left.minValue();
         while (iter.hasNext())
         {
             // If current goes to the end of the ring, we're done
@@ -447,29 +468,21 @@ public class Range<T extends RingPosition<T>> extends AbstractBounds<T> implemen
         return output;
     }
 
+    public AbstractBounds<T> withNewRight(T newRight)
+    {
+        return new Range<T>(left, newRight);
+    }
 
     /**
      * Compute a range of keys corresponding to a given range of token.
      */
-    public static Range<RowPosition> makeRowRange(Token left, Token right)
+    public static Range<PartitionPosition> makeRowRange(Token left, Token right)
     {
-        return new Range<RowPosition>(left.maxKeyBound(), right.maxKeyBound());
+        return new Range<PartitionPosition>(left.maxKeyBound(), right.maxKeyBound());
     }
 
-    @SuppressWarnings("unchecked")
-    public AbstractBounds<RowPosition> toRowBounds()
+    public static Range<PartitionPosition> makeRowRange(Range<Token> tokenBounds)
     {
-        return (left instanceof Token) ? makeRowRange((Token)left, (Token)right) : (Range<RowPosition>)this;
-    }
-
-    @SuppressWarnings("unchecked")
-    public AbstractBounds<Token> toTokenBounds()
-    {
-        return (left instanceof RowPosition) ? new Range<Token>(((RowPosition)left).getToken(), ((RowPosition)right).getToken()) : (Range<Token>)this;
-    }
-
-    public AbstractBounds<T> withNewRight(T newRight)
-    {
-        return new Range<T>(left, newRight);
+        return makeRowRange(tokenBounds.left, tokenBounds.right);
     }
 }
